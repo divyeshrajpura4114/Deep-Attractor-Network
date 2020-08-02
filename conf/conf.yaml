@@ -1,0 +1,63 @@
+device: "cpu"
+
+sr: 16000
+eps: 1e-6
+
+data:
+  segments:
+    max_segment_dur: 1
+    overlap_dur: 0.5
+
+features:
+  n_fft: 512
+  win_size: 512
+  hop_size: 128
+  window: 'hann'
+  n_mels: 64
+  fmin: 0
+  fmax: 8000
+  htk: !!bool "false"
+
+sources:
+  num_sources: 2
+  sources:
+    - vocals
+    - instrument_mixture
+
+model:
+    sequence_length: 126
+    feature_size: 64
+    embedding_size: 20
+    multirnn:
+      input_size: 64
+      hidden_size: 300
+      output_size: 20
+      num_layers: 3
+      bidirectional: !!bool "true" 
+      dropout: 0.5
+    fc:
+      input_size: 600
+      output_size: 1280
+    model_path: 'danet/ckpt_dir/latest_ckpt.model' #Model path for testing, inference, or resuming training
+
+train:
+    num_workers: 0 #number of workers for dataloader
+    lr: 0.001
+    batch_size: 32
+    epochs: 5 #Max training speaker epoch 
+    log_interval: 10 #Epochs before printing progress
+    ckpt_interval: 10 #Save model after x speaker epochs
+    ckpt_dir: 'danet/ckpt_dir'
+    restore: !!bool "false" #Resume training from previous model path
+
+  # data:
+#     dataset_path: '/home/speechlab/Divyesh/Dataset/MUSDB18/'
+#     data_folder: 'data'
+#     result_folder: 'result'
+#     feature_folder: 'features/mel_stft'
+#     sr: 16000
+
+# test:
+#     batch_size: 1
+#     data_type: 'test'
+#     seq_type: 'partial'

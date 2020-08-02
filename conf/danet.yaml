@@ -1,0 +1,34 @@
+training: !!bool "true"
+device: "cuda"
+
+train:
+    num_workers: 0 #number of workers for dataloader
+    lr: 0.001
+    epochs: 200 #Max training speaker epoch 
+    log_interval: 10 #Epochs before printing progress
+    ckpt_interval: 10 #Save model after x speaker epochs
+    ckpt_dir: 'danet/ckpt_dir'
+    restore: !!bool "false" #Resume training from previous model path
+    batch_size: 16
+    seq_type: 'partial'
+
+test:
+    batch_size: 1
+    data_type: 'test'
+    seq_type: 'partial'
+
+model:
+    sequence_length: 100
+    feature_size: 300
+    embedding_size: 20
+    dropout: 0.5
+    lstm:
+        num_layers: 3
+        bidirectional: !!bool "true" 
+        input_size: 300
+        hidden_size: 300
+        output_size: 20
+    linear:
+        input_size: 600
+        output_size: 6000
+    model_path: 'danet/ckpt_dir/latest_ckpt.model' #Model path for testing, inference, or resuming training
