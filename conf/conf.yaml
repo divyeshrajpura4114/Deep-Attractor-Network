@@ -58,15 +58,3 @@ visdom:
 
 test:
     batch_size: 32
-
-  # data:
-#     dataset_path: '/home/speechlab/Divyesh/Dataset/MUSDB18/'
-#     data_folder: 'data'
-#     result_folder: 'result'
-#     feature_folder: 'features/mel_stft'
-#     sr: 16000
-
-# test:
-#     batch_size: 1
-#     data_type: 'test'
-#     seq_type: 'partial'
