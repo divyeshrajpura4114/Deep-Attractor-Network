@@ -1,6 +1,51 @@
 # Deep Attractor Netowrk for Music Source Separation
 ____
 
+This repository is implemented for Music Source Separation on MUSDB-18 database. Currently, it focuses on spearation into two sources, namely, vocal and instrument mixture. However, it can be easily modified to have multiple sources. 
+
+## Directory Structure:
+```
+deep-attractor-network
+|
+└─── data
+|   |   
+|   └─── musdb18_train
+|   |   |   wav.scp
+|   |   |   utt2dur
+|   |   |   segments
+|   |   |   feats.scp
+|   |  
+|   └─── musdb18_test
+|       |   wav.scp
+|       |   utt2dur
+|       |   segments
+|       |   feats.scp 
+|    
+└─── local
+|   |   nnet
+|   |   common
+|
+└─── exp
+|   |   
+|   └─── musdb18_train
+|   |   |   ckpt_models
+|   |  
+|   └─── musdb18_test
+|       |   result
+|
+└─── mfcc
+|
+└─── run_danet.sh
+
+```
+
+## Prerequisites:
+
+- Linux, MacOS
+- Python 3
+- CPU or NVIDIA GPU + CUDA CuDNN
+- ffmpeg (Command line utility that can convert various formats of computer audio files in to other formats.)
+
 ## Required Python libraries:
 
 ```

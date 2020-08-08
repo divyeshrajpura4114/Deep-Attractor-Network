@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
 import common
-from common import params, libraries
+from common import params, libraries, visdomvisulization
 from common.libraries import *
 
 import nnet
-from nnet import model, dataset, loss, utils, visdomvisulization
+from nnet import model, dataset, loss, utils
 
 def GetArgs():
     parser = argparse.ArgumentParser(description="Voice Activity Detection (webrtc)",
