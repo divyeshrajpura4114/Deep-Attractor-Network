@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
-from . import libraries, params
-from .libraries import *
+import common
+from common import libraries, params
+from common.libraries import *
 
 class MultiRNN(nn.Module):
     def __init__(self, hp):
@@ -41,12 +42,12 @@ class LinearLayer(nn.Module):
         self.linear.weight.data.uniform_(-initrange,initrange)
 
 class DANet(nn.Module):
-    def __init__(self, hp):
+    def __init__(self, hp, data_type):
         super(DANet,self).__init__()
         self.hp = hp
-
-        self.rnn = MultiRNN(self.hp)
-        self.linear = LinearLayer(self.hp)
+        self.data_type = data_type
+        self.rnn = MultiRNN(self.hp).to(self.hp.device)
+        self.linear = LinearLayer(self.hp).to(self.hp.device)
         self.tanh = nn.Tanh()
         self.sigmoid = nn.Sigmoid()
 
@@ -57,50 +58,55 @@ class DANet(nn.Module):
         
         batch_features = batch_features.to(self.hp.device)
         
-        self.rnn.to(self.hp.device)
-
-        LSTMOutput, hidden = self.rnn(batch_features, hidden)
         # LSTMOutput : [B, T, numDirection*hiddenSize]
         # hidden : [numDirections*numLayers, B, hiddenSize]
-
-        LSTMOutput = LSTMOutput.contiguous().view(-1,LSTMOutput.size(2)) 
+        LSTMOutput, hidden = self.rnn(batch_features, hidden)
+        
         # LSTMOutput : [B*T, noOfDirections*hiddenSize]
-        self.linear.to(self.hp.device)
-
+        LSTMOutput = LSTMOutput.contiguous().view(-1,LSTMOutput.size(2)) 
+        
         V = self.linear(LSTMOutput) 
 
-        V = self.tanh(V)
         # V : [B*T,F*K]
+        V = self.tanh(V)
 
-        V = V.view(-1, self.hp.model.sequence_length * self.hp.model.feature_size, self.hp.model.embedding_size) 
-        # V : [B, T*F, K]
+        if self.data_type == "train" or self.data_type == "val":
+            # V : [B, T*F, K]
+            V = V.view(self.hp.train.batch_size, self.hp.model.sequence_length * self.hp.model.feature_size, self.hp.model.embedding_size) 
+            
+            # batch_weight_thresh = batch_weight_thresh.view(-1, self.hp.model.sequence_length * self.hp.model.feature_size, 1)
 
-        # batch_weight_thresh = batch_weight_thresh.view(-1, self.hp.model.sequence_length * self.hp.model.feature_size, 1)
+            # Y = batch_ibm * batch_weight_thresh.expand_as(batch_ibm)
+            # Y : [B, T*F, nspk]
+            Y = batch_ideal_mask
 
-        # Y = batch_ibm * batch_weight_thresh.expand_as(batch_ibm)
-        Y = batch_ideal_mask
-        # Y : [B, T*F, nspk]
+            # torch.transpose(V, 1,2) : [B, K, T*F]
+            # V_Y : [B, K, nspk]
+            V_Y = torch.bmm(torch.transpose(V, 1,2), Y) 
 
-        V_Y = torch.bmm(torch.transpose(V, 1,2), Y) 
-        # torch.transpose(V, 1,2) : [B, K, T*F]
-        # V_Y : [B, K, nspk]
+            # sum_Y : [B, 1, nspk]
+            sum_Y = torch.sum(Y, 1, keepdim=True)
 
-        sum_Y = torch.sum(Y, 1, keepdim=True)
-        # sum_Y : [B, 1, nspk]
+            # sum_Y : [B, K, nspk]
+            sum_Y = sum_Y.expand_as(V_Y) 
 
-        sum_Y = sum_Y.expand_as(V_Y) 
-        # sum_Y : [B, K, nspk]
+            # attractor : [B, K, nspk]
+            attractor = V_Y / (sum_Y + float(self.hp.eps))
 
-        attractor = V_Y / (sum_Y + float(self.hp.eps))
-        # attractor : [B, K, nspk]
+            # dist : [B, T*F, nspk]
+            dist = V.bmm(attractor) 
 
-        dist = V.bmm(attractor) 
-        # dist : [B, T*F, nspk]
+            # mask : [B, T*F, nspk]
+            mask = self.sigmoid(dist) 
+            
+            return mask, hidden
 
-        mask = self.sigmoid(dist) 
-        # mask : [B, T*F, nspk]
-        
-        return mask, hidden
+        elif self.data_type == "test":
+            # V = V.view(-1, self.hp.model.sequence_length * self.hp.model.feature_size, self.hp.model.embedding_size) 
+            # V : [B, T*F, K]
+            V = V.view(self.hp.test.batch_size, -1 , self.hp.model.embedding_size)
+            
+            return V
 
     def init_hidden(self, batch_size):
         return self.rnn.init_hidden(batch_size)
@@ -110,11 +116,8 @@ class DANet_test(nn.Module):
     def __init__(self):
         super(DANet_test,self).__init__()
         self.hp = params.Hparam().load_hparam()
-        self.eps = 1e-8
-
-        self.rnn = model_base.MultiRNN()
-
-        self.linear = model_base.FCLayer()
+        self.rnn = MultiRNN(self.hp).to(self.hp.device)
+        self.linear = LinearLayer(self.hp).to(self.hp.device)
         self.tanh = nn.Tanh()
         self.sigmoid = nn.Sigmoid()
 
@@ -124,15 +127,12 @@ class DANet_test(nn.Module):
         # batch_weight_thresh : [B, T*F, 1]
         batch_features = batch_features.to(self.hp.device)
 
-        self.rnn.to(self.hp.device)
         LSTMOutput, hidden = self.rnn(batch_features, hidden)
         # LSTMOutput : [B, T, numDirection*hiddenSize]
         # hidden : [numDirections*numLayers, B, hiddenSize]
 
         LSTMOutput = LSTMOutput.contiguous().view(-1,LSTMOutput.size(2)) 
         # LSTMOutput : [B*T, noOfDirections*hiddenSize]
-
-        self.linear.to(self.hp.device)
 
         V = self.linear(LSTMOutput) 
 

@@ -1,4 +1,6 @@
-device: "cpu"
+model_name: danet
+database: musdb18
+device: cpu
 
 sr: 16000
 eps: 1e-6
@@ -38,17 +40,24 @@ model:
     fc:
       input_size: 600
       output_size: 1280
-    model_path: 'danet/ckpt_dir/latest_ckpt.model' #Model path for testing, inference, or resuming training
 
 train:
     num_workers: 0 #number of workers for dataloader
     lr: 0.001
     batch_size: 32
-    epochs: 5 #Max training speaker epoch 
-    log_interval: 10 #Epochs before printing progress
-    ckpt_interval: 10 #Save model after x speaker epochs
-    ckpt_dir: 'danet/ckpt_dir'
+    epochs: 5                         # Max training epochs
+    log_interval: 10                  # Epochs before printing progress
+    ckpt_interval: 1                  # Save model after x epochs
+    model_path: 'danet/ckpt_dir/latest_ckpt.model' #Model path for testing, inference, or resuming training 
     restore: !!bool "false" #Resume training from previous model path
+
+visdom:
+  get_plot: !!bool "false"
+  xlabel: "epoch"
+  ylabel: "loss"
+
+test:
+    batch_size: 32
 
   # data:
 #     dataset_path: '/home/speechlab/Divyesh/Dataset/MUSDB18/'

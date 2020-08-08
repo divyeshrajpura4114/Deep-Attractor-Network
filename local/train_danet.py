@@ -1,27 +1,19 @@
 #!/usr/bin/env python
 
-import os
-import sys
-import time
-import h5py
-import librosa
-import argparse
-import numpy as np
-import datetime
-from datetime import datetime
-import torch.optim as optim
-import torch
-from torch.utils.data import DataLoader
-import visdom
+import common
+from common import params, libraries
+from common.libraries import *
 
 import nnet
-from nnet import params, model, dataset, loss, utils, visdomvisulization
+from nnet import model, dataset, loss, utils, visdomvisulization
 
 def GetArgs():
     parser = argparse.ArgumentParser(description="Voice Activity Detection (webrtc)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--in-data-dir', type=str, dest = "in_data_dir", required = True,
         help='Proivde valid input data directory')
+    parser.add_argument('--ckpt-dir', type=str, dest = "ckpt_dir", required = True,
+        help='Proivde valid checkpoint directory')
     parser.add_argument('--conf-path', type=str, dest = "conf_path", required = True,
         help='Proivde valid config path')
     sys.stderr.write(' '.join(sys.argv) + "\n")
@@ -34,6 +26,8 @@ def CheckArgs(args):
         raise Exception("This script expects" + args.in_data_dir + "to exist")
     if not os.path.exists(args.conf_path):
         raise Exception("This script expects" + args.conf_path + "to exist")
+    if not os.path.exists(args.ckpt_dir):
+        os.makedirs(args.ckpt_dir)
     return args
 
 def train_epoch(epoch):
@@ -47,7 +41,7 @@ def train_epoch(epoch):
         hidden = danet_model.init_hidden(hp.train.batch_size)
         optimizer.zero_grad()
         batch_est_mask, hidden = danet_model(hidden = hidden, batch_features = batch_mixture_mel_stft, batch_weight_thresh = batch_weight_thresh, batch_ideal_mask = batch_ideal_mask)
-        loss = compute_loss(batch_features = batch_mixture_mel_stft, batch_ideal_mask = batch_ideal_mask, batch_est_mask = batch_est_mask)
+        loss = danet_loss(batch_features = batch_mixture_mel_stft, batch_ideal_mask = batch_ideal_mask, batch_est_mask = batch_est_mask)
         loss.backward()
 
         torch.nn.utils.clip_grad_norm_(danet_model.parameters(), 3.0)
@@ -61,12 +55,9 @@ def train_epoch(epoch):
                         iteration, loss.data.item(), train_loss/(batch_id + 1))
             print(mesg)
 
-            with open(os.path.join(hp.train.ckpt_dir,'stats'),'a') as f:
+            with open(log_file,'a') as f:
                 f.write(mesg)
 
-            # if hp.train.log_file is not None:
-            #     with open(hp.train.log_file,'a') as f:
-            #         f.write(mesg)
         iteration = iteration + 1
     
     train_loss = train_loss/len(train_loader)
@@ -81,25 +72,31 @@ def do_training():
         start_time = datetime.now()
         
         trainLoss.append(train_epoch(epoch))
-        train_vis.plot_loss(trainLoss[-1], epoch, "Train")
+    
+        if hp.visdom.get_plot == True:
+            train_vis.plot_loss(trainLoss[-1], epoch)
+
+        #save danet_model
+        danet_model.eval().cpu()
 
         if trainLoss[-1] == np.min(trainLoss):
             print('\tBest training model found.')
+            utils.ckpt_save(ckpt_dir, epoch+1, danet_model.__str__(),
+                            danet_model.state_dict(), optimizer.state_dict(), scheduler.state_dict(),
+                            danet_loss.state_dict(), trainLoss[-1], 0, dict(hp), best_train = True)
 
         end_time = datetime.now()
         print('Start Time : {0} | Elapsed Time: {1}'.format(str(start_time), str(end_time - start_time)))
         print('-' * 85)
         print('\n')
-        if hp.train.ckpt_dir is not None and (epoch + 1) % hp.train.ckpt_interval == 0:
-            utils.ckpt_save(hp.train.ckpt_dir, epoch+1, 
-                                    danet_model.state_dict(), optimizer.state_dict(),
-                                    compute_loss.state_dict(), trainLoss[-1], dict(hp))
+        if (epoch + 1) % hp.train.ckpt_interval == 0:
+            utils.ckpt_save(ckpt_dir, epoch+1, danet_model.__str__(),
+                            danet_model.state_dict(), optimizer.state_dict(), scheduler.state_dict(),
+                            danet_loss.state_dict(), trainLoss[-1], 0, dict(hp))
 
-    #save danet_model
-    danet_model.eval().cpu()
-    utils.ckpt_save(hp.train.ckpt_dir, end_epoch, 
-                            danet_model.state_dict(), optimizer.state_dict(),
-                            compute_loss.state_dict(), trainLoss[-1], dict(hp), latest_ckpt = True)
+    utils.ckpt_save(ckpt_dir, epoch+1, danet_model.__str__(),
+                            danet_model.state_dict(), optimizer.state_dict(), scheduler.state_dict(),
+                            danet_loss.state_dict(), trainLoss[-1], 0, dict(hp), latest_ckpt = True)
 
 if __name__ == '__main__':
     args = GetArgs()
@@ -109,16 +106,22 @@ if __name__ == '__main__':
     if not os.path.exists(featsscp_path):
         raise Exception("This script expects" + featsscp_path + "to exist")
 
-    compute_loss = loss.TFMaskLoss().to(hp.device)
+    ckpt_dir = args.ckpt_dir
+    log_file = os.path.join(ckpt_dir, 'stats')
 
-    train_vis = visdomvisulization.visdomvisulization()
-    val_vis = visdomvisulization.visdomvisulization()
+    with open(log_file, 'w') as f_log:
+        f_log.truncate(0)
 
-    danet_model = model.DANet(hp).to(hp.device)
-    print(danet_model)
+    if hp.visdom.get_plot == True:
+        train_vis = visdomvisulization.visdomvisulization(env_name = hp.model_name, title = hp.model_name + "_" + hp.database + "_" + "train", xlabel = hp.visdom.xlabel, ylabel = hp.visdom.ylabel)
+
+    danet_model = model.DANet(hp, "train").to(hp.device)
+    danet_loss = loss.TFMaskLoss().to(hp.device)
     optimizer = optim.Adam(danet_model.parameters(), lr = hp.train.lr)
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.5)
 
+    print(danet_model)
+    
     train_data = dataset.MUSDB18Dataset(args.in_data_dir, hp)
     train_loader = DataLoader(train_data, batch_size = hp.train.batch_size, shuffle = True, drop_last = True, collate_fn = utils.load_train_batch)
     
@@ -128,7 +131,7 @@ if __name__ == '__main__':
     #     state_dict = torch.load(hp.model.model_path)
     #     danet_model.load_state_dict(state_dict['model_state_dict'])
     #     optimizer.load_state_dict(state_dict['optimizer_state_dict'])
-    #     compute_loss.load_state_dict(state_dict['loss_state_dict'])
+    #     danet_loss.load_state_dict(state_dict['loss_state_dict'])
     #     for state in optimizer.state.values():
     #         for k, v in state.items():
     #             if isinstance(v, torch.Tensor):

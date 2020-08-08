@@ -5,7 +5,8 @@ import sys
 import librosa
 import argparse
 
-import params
+import common
+from common import params
 
 def GetArgs():
     parser = argparse.ArgumentParser(description="Voice Activity Detection (webrtc)",

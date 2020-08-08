@@ -29,24 +29,29 @@ musdb18_dir=/home/divraj/divyesh/dataset/MUSDB18-7-STEMS
 # test_vec_dir=test_vec
 
 if [ $stage -eq 0 ]; then
-    local/decode.sh ${musdb18_dir} train data/musdb18_train/data
-    local/decode.sh ${musdb18_dir} test data/musdb18_test/data
-    
-    local/make_musdb18.pl data/musdb18_train/data data/musdb18_train
-    local/make_musdb18.pl data/musdb18_test/data data/musdb18_test
+    for x in train test; do
+        local/decode_data.sh ${musdb18_dir} ${x} data/musdb18_${x}/data
+        
+        local/make_musdb18.pl data/musdb18_${x}/data data/musdb18_${x}
 
-    local/get_durations.py --in-data-dir data/musdb18_train
-    local/get_segments.py --in-data-dir data/musdb18_train --conf-path conf/conf.yaml
+        local/get_durations.py --in-data-dir data/musdb18_${x}
+        local/get_segments.py --in-data-dir data/musdb18_${x} --conf-path conf/conf.yaml
+    done
 fi
 
 if [ $stage -eq 1 ]; then
-    local/extract_mfcc.py --in-data-dir data/musdb18_train --conf-path conf/conf.yaml
+    for x in test; do # train
+        local/extract_mel_stft.py --in-data-dir data/musdb18_${x} --conf-path conf/conf.yaml
+    done
 fi
 
 if [ $stage -eq 2 ]; then
-    local/extract_mfcc.py --in-data-dir data/musdb18_train --conf-path conf/conf.yaml
+    local/train_danet.py --in-data-dir data/musdb18_train --conf-path conf/conf.yaml --ckpt-dir exp/musdb18_train/ckpt_models
 fi
 
+if [ $stage -eq 3 ]; then
+    local/test_danet.py --in-data-dir data/musdb18_test --conf-path conf/conf.yaml --model-path exp/musdb18_train/ckpt_models/best_train.pt --result-dir exp/musdb18_test/result
+fi
     # mkdir -p data/musdb18
     # if [ ${num_of_sources} -eq 2 ]; then
     #     echo -e "vocal\ninstrument" > data/musdb18/sources

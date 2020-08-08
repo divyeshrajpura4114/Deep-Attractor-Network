@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
-from . import libraries, params
-from .libraries import *
+import common
+from common import libraries, params
+from common.libraries import *
 
-hp = params.Hparam().load_hparam()
+hp = params.Hparam('/home/divraj/divyesh/deep-attractor-network/conf/conf.yaml').load_hparam()
 
 def load_train_batch(batch_data):
     device = torch.device(hp.device)
@@ -71,13 +72,38 @@ def pad_collate(batch):
     packed = pack_padded_sequence(padded, lens, batch_first=True, enforce_sorted=False)
     return packed
 
-def ckpt_save(ckpt_dir, epoch, model_params, optimizer_params, loss_params, loss_value, hp_params,
-                latest_ckpt = False, best_val = False, early_stop = False):
+# def ckpt_save(ckpt_dir, epoch, model_params, optimizer_params, loss_params, loss_value, hp_params,
+#                 latest_ckpt = False, best_val = False, early_stop = False):
+    
+#     if latest_ckpt == True:
+#         ckpt_model_filename = 'latest_ckpt.pt'
+#     elif best_val == True:
+#         ckpt_model_filename = 'best_val.pt'
+#     elif early_stop == True:
+#         ckpt_model_filename = 'early_stop.pt'
+#     else:
+#         ckpt_model_filename = "ckpt_epoch_" + str(epoch) + ".pt"
+
+#     ckpt_model_path = os.path.join(ckpt_dir, ckpt_model_filename)
+#     ckpt_dict = {
+#             'epoch': epoch,
+#             'model_state_dict': model_params,
+#             'optimizer_state_dict': optimizer_params,
+#             'loss_state_dict': loss_params,
+#             'train_loss' : loss_value,
+#             'params'  : hp_params
+#             }
+#     torch.save(ckpt_dict, ckpt_model_path)
+
+def ckpt_save(ckpt_dir, epoch, model, model_params, optimizer_params, scheduler_params, loss_params, train_loss, val_loss, hp_params,
+                latest_ckpt = False, best_val = False, best_train = False, early_stop = False):
     
     if latest_ckpt == True:
         ckpt_model_filename = 'latest_ckpt.pt'
     elif best_val == True:
         ckpt_model_filename = 'best_val.pt'
+    elif best_train == True:
+        ckpt_model_filename = 'best_train.pt'
     elif early_stop == True:
         ckpt_model_filename = 'early_stop.pt'
     else:
@@ -86,10 +112,13 @@ def ckpt_save(ckpt_dir, epoch, model_params, optimizer_params, loss_params, loss
     ckpt_model_path = os.path.join(ckpt_dir, ckpt_model_filename)
     ckpt_dict = {
             'epoch': epoch,
+            'model': model,
             'model_state_dict': model_params,
             'optimizer_state_dict': optimizer_params,
+            'scheduler_state_dict': scheduler_params,
             'loss_state_dict': loss_params,
-            'train_loss' : loss_value,
-            'params'  : hp_params
+            'train_loss' : train_loss,
+            'val_loss' : val_loss,
+            'config_params'  : hp_params
             }
     torch.save(ckpt_dict, ckpt_model_path)

@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
-import nnet
-from nnet import params, libraries
-from nnet.libraries import *
+import common
+from common import params, libraries
+from common.libraries import *
 
 def GetArgs():
     parser = argparse.ArgumentParser(description="Voice Activity Detection (webrtc)",

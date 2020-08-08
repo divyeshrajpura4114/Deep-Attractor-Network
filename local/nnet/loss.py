@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
-from . import libraries, params
-from .libraries import *
+import common
+from common import libraries, params
+from common.libraries import *
 
 class TFMaskLoss(nn.Module):
     def __init__(self):
